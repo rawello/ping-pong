@@ -2,11 +2,18 @@ const btnEasy = document.getElementById('easy');
 const btnMed = document.getElementById('medium');
 const btnHard = document.getElementById('hard');
 
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+
+let pauseState = true;
 let compSpeed = 1.75;
 let ballSpeed = 5.0;
+let ballState = 1;
+let touchCount = 1;
+let rndPause = 0;
+let prevPoints = [0, 0];
 
 let player = {
     x: 20,
@@ -14,7 +21,8 @@ let player = {
     width: 10,
     height: 100,
     speed: 5,
-    score: 0
+    score: 0,
+    name: ""
 };
 
 let computer = {
@@ -59,8 +67,23 @@ function render() {
     drawRect(player.x, player.y, player.width, player.height, 'white');
     drawRect(computer.x, computer.y, computer.width, computer.height, 'white');
     drawCircle(ball.x, ball.y, ball.radius, 'white');
+    drawText(player.name, 150, 50, 'white');
+    drawText("GigaChat", 500, 50, 'white');
     drawText(player.score, canvas.width / 4, 100, 'white');
     drawText(computer.score, (3 * canvas.width) / 4, 100, 'white');
+}
+
+function renderBeforeStart() {
+    drawText("Нажмите чтобы продолжить", 125, 300, 'white');
+}
+
+function renderPause() {
+    console.log(prevPoints, player.score, computer.score)
+    if (prevPoints == [player.score, computer.score]) {
+        drawText("Вылет!", 335, 300, 'white');
+    } else {
+        drawText("Очко!", 335, 300, 'white');
+    }
 }
 
 function collision(b, p) {
@@ -78,10 +101,51 @@ function collision(b, p) {
 }
 
 function resetBall() {
-    ball.x = canvas.width / 2;
-    ball.y = canvas.height / 2;
-    ball.speed = ball.speed;
-    ball.velocityX = -ball.velocityX;
+    rndPause = 1;
+    pauseState = true;
+    setTimeout(() => {
+        if (player.score == 11) {
+            alert("Победа");
+            setEasy();
+            computer.score = player.score = 0;
+            let win = document.createElement("H1");
+            win.id = "afterwin";
+            win.textContent = player.name + " победил GigaChat со счетом " + player.score + " vs " + computer.score;
+            document.body.appendChild(win);
+        }
+        else if (computer.score == 11) {
+            alert("Поражение");
+            setEasy();
+            computer.score = player.score = 0;
+            let win = document.createElement("H1");
+            win.id = "afterwin";
+            win.textContent = "GigaChat победил " + player.name + " со счетом " + computer.score + " vs " + player.score;
+            document.body.appendChild(win);
+        }
+
+        ball.x = canvas.width / 2;
+        ball.y = canvas.height / 2;
+
+        switch (ballState) {
+            case 1:
+                ball.speed = 5.0 * 0.75;
+                break
+            case 2:
+                ball.speed = 12.5 * 0.75;
+                break;
+            case 3:
+                ball.speed = 18.5 * 0.75;
+                break;
+            default:
+                ball.speed = 5.0;
+                break;
+        }
+
+        ball.velocityX = -ball.velocityX;
+        ball.velocityY = 3;
+        pauseState = false;
+        rndPause = 0;
+    }, 600);
 }
 
 function computerMovement() {
@@ -94,26 +158,59 @@ function computerMovement() {
     }
 }
 
+let i = 0;
 function game() {
-    update();
-    render();
-}
-
-function update() {
     btnEasy.addEventListener('click', function () {
-        computer.speed = 1.75;
-        ball.speed = 5.0;
+        setEasy();
     })
 
     btnMed.addEventListener('click', function () {
-        computer.speed = 2.75;
-        ball.speed = 6.5;
+        setMedium();
     })
 
     btnHard.addEventListener('click', function () {
-        computer.speed = 4.75;
-        ball.speed = 8;
+        setHard();
     })
+
+    render();
+    if (!rndPause) {
+        renderBeforeStart();
+    } else {
+        renderPause();
+    }
+    if (!pauseState) {
+        update();
+        render();
+    }
+    for (; i == 0; i++) {
+        player.name = prompt("Введите имя: ").replace(/\s+/g, "")
+        if (player.name.length < 3) {
+            i--;
+            alert("Длина имени не менее 3 символов.")
+        }
+    }
+}
+
+function setEasy() {
+    computer.speed = 1.75;
+    ball.speed = 5.0;
+    ballState = 1;
+}
+
+function setMedium() {
+    computer.speed = 5.75;
+    ball.speed = 12.5;
+    ballState = 2;
+}
+
+function setHard() {
+    computer.speed = 15.0;
+    ball.speed = 18;
+    ballState = 3;
+}
+
+function update() {
+    prevPoints = [player.score, computer.score];
 
     ball.x += ball.velocityX;
     ball.y += ball.velocityY;
@@ -138,7 +235,12 @@ function update() {
         resetBall();
     }
 
+    if (ball.y + ball.radius < 0 || ball.y - ball.radius > canvas.height) {
+        resetBall();
+    }
+
     if (playerPaddle) {
+        ball.speed += touchCount * 0.0025;
         let collisionPoint = (ball.y - (player.y + player.height / 2));
         collisionPoint = collisionPoint / (player.height / 2);
 
@@ -147,9 +249,11 @@ function update() {
         ball.velocityX = ball.speed * Math.cos(angle);
         ball.velocityY = ball.speed * Math.sin(angle);
 
-        ball.speed += 0.025;
-        computer.speed += 0.005
+        ball.speed += 0.0025;
+        computer.speed += 0.005;
+        touchCount++;
     } else if (computerPaddle) {
+        ball.speed += touchCount * 0.025;
         let collisionPoint = (ball.y - (computer.y + computer.height / 2));
         collisionPoint = collisionPoint / (computer.height / 2);
 
@@ -158,7 +262,8 @@ function update() {
         ball.velocityX = -ball.speed * Math.cos(angle);
         ball.velocityY = ball.speed * Math.sin(angle);
 
-        ball.speed += 0.1;
+        ball.speed += 0.0025;
+        touchCount++;
     }
 }
 
@@ -167,5 +272,9 @@ canvas.addEventListener('mousemove', function (e) {
     player.y = e.clientY - rect.top - player.height / 2;
 });
 
+
+canvas.addEventListener('click', function () {
+    pauseState = !pauseState;
+})
 
 setInterval(game, 1000 / 60);
