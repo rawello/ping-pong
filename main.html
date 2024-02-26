@@ -1,29 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
 
+<style>
+    canvas {
+        border: 1px solid black;
+        display: block;
+        margin: 0 auto;
+    }
+
+    h3 {
+        width: 10%;
+        margin-left: 45%;
+        text-align: center;
+        border-radius: 10px;
+        box-shadow: 0 0 0 3px #a9a9a9;
+        border: 5px solid transparent;
+    }
+
+    #btns {
+        width: 20%;
+        text-align: center;
+        margin-left: 40%;
+        border-radius: 10px;
+        box-shadow: 0 0 0 3px #a9a9a9;
+        border: 5px solid transparent;
+
+        button {
+            border-radius: 10px;
+            box-shadow: 0 0 0 3px #a9a9a9;
+
+        }
+    }
+
+    #afterwin {
+        width: 30%;
+        margin-left: 35%;
+        text-align: center;
+        border-radius: 10px;
+        box-shadow: 0 0 0 3px #a9a9a9;
+        border: 5px solid transparent;
+    }
+</style>
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ping Pong Game</title>
-    <style>
-        canvas {
-            border: 1px solid black;
-            display: block;
-            margin: 0 auto;
-        }
-    </style>
+    <title>Voronoff Pong</title>
 </head>
 
 <body>
-    <canvas id="gameCanvas" width="800" height="400"></canvas>
-
     <h3>Выбор сложности</h3>
+    <div id="btns">
+        <button id="easy">Легко</button>
+        <button id="medium">Средне</button>
+        <button id="hard">Сложно</button>
+    </div>
     <br>
-
-    <button id="easy">Легко</button>
-    <button id="medium">Средне</button>
-    <button id="hard">Сложно</button>
-
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
 
     <script src="pp.js">
     </script>
