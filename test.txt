@@ -1,0 +1,321 @@
+using Microsoft.EntityFrameworkCore;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Windows;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace WpfApp1
+{
+    public class Appdatabase : DbContext
+    {
+        public Appdatabase(){}
+
+        public Appdatabase(DbContextOptions<Appdatabase> options)
+            : base(options){}
+
+        public DbSet<Doctor> Doctors { get; set; }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+            if (!optionsBuilder.IsConfigured)
+                optionsBuilder.UseSqlServer("Data Source=localhost;Initial Catalog=chemp;Integrated Security=True;Encrypt=False");
+        }
+    }
+
+    public class Doctor : INotifyPropertyChanged
+    {
+        public int DoctorID { get; set; }
+        public string Surname { get; set; }
+        public string Name { get; set; }
+        public string Speciality { get; set; }
+
+        [NotMapped]
+        public ObservableCollection<DateTime>[] WorkingHours { get; set; }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        public Doctor()
+        {
+            WorkingHours = new ObservableCollection<DateTime>[6];
+            for (int i = 0; i < 6; i++)
+                WorkingHours[i] = new ObservableCollection<DateTime>();
+        }
+    }
+
+    public class ScheduleGenerator
+    {
+        private readonly Appdatabase _dbContext;
+
+        public ObservableCollection<Doctor> Doctors { get; set; }
+
+        public ScheduleGenerator()
+        {
+            _dbContext = new Appdatabase();
+            Doctors = new ObservableCollection<Doctor>(_dbContext.Doctors.ToList());
+        }
+
+        public void GenerateSchedule()
+        {
+            int totalWorkingHoursPerWeek = 40;
+            Random rand = new Random();
+
+            bool[][] doctorWorkingDays = new bool[Doctors.Count][];
+            for (int i = 0; i < Doctors.Count; i++)
+            {
+                doctorWorkingDays[i] = new bool[6];
+                for (int j = 0; j < 6; j++)
+                    doctorWorkingDays[i][j] = rand.NextDouble() < 0.7; 
+            }
+
+            int hoursPerDay = totalWorkingHoursPerWeek / 5;
+            int remainingHours = totalWorkingHoursPerWeek % 7;
+
+            foreach (var doctor in Doctors)
+            {
+                for (int day = 0; day < 6; day++)
+                {
+                    if (doctorWorkingDays[Doctors.IndexOf(doctor)][day])
+                    {
+                        int workingHoursThisDay = hoursPerDay + (remainingHours > 0 ? 1 : 0);
+                        remainingHours--;
+
+                        for (int hour = 0; hour < workingHoursThisDay; hour++)
+                        {
+                            int startHour = 8 + hour + rand.Next(5);
+                            DateTime slot = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day).AddDays(day).AddHours(startHour);
+
+                            if (!doctor.WorkingHours[day].Contains(slot))
+                                doctor.WorkingHours[day].Add(slot);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public partial class MainWindow : Window
+    {
+        private ScheduleGenerator _scheduleGenerator;
+
+        public MainWindow()
+        {
+            InitializeComponent();
+            _scheduleGenerator = new ScheduleGenerator();
+            _scheduleGenerator.GenerateSchedule();
+            DataContext = _scheduleGenerator.Doctors;
+        }
+
+        private void ApplyFilterButton_Click(object sender, RoutedEventArgs e)
+        {
+            string doctorNameFilter = DoctorNameFilterTextBox.Text;
+            string specialtyFilter = SpecialityFilterTextBox.Text;
+
+
+            var filteredDoctors = _scheduleGenerator.Doctors.Where(doctor =>
+                (string.IsNullOrEmpty(doctorNameFilter) || doctor.Surname.Contains(doctorNameFilter, StringComparison.OrdinalIgnoreCase)) &&
+                (string.IsNullOrEmpty(specialtyFilter) || doctor.Speciality.Contains(specialtyFilter, StringComparison.OrdinalIgnoreCase)));
+
+            ScheduleDataGrid.ItemsSource = filteredDoctors;
+        }
+
+        private void Button_Click(object sender, RoutedEventArgs e)
+        {
+            var schedule = new ScheduleGenerator();
+            schedule.GenerateSchedule();
+            ScheduleDataGrid.ItemsSource = schedule.Doctors;
+        }
+    }
+}
+
+
+
+
+
+
+<Window x:Class="WpfApp1.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Doctor Schedule" MinHeight="450" MinWidth="1000">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Grid.Row="0">
+            <Label Content="Поиск по имени врача:" />
+            <TextBox x:Name="DoctorNameFilterTextBox" Width="150" />
+
+            <Label Content="Поиск по специальности:" Width="151" />
+            <TextBox x:Name="SpecialityFilterTextBox" Width="184" />
+
+            <Button Content="Применить фильтр" Click="ApplyFilterButton_Click" />
+            <Button Content="Сделать расписание" Width="124" Click="Button_Click"/>
+        </StackPanel>
+
+        <DataGrid x:Name="ScheduleDataGrid" AutoGenerateColumns="False" ItemsSource="{Binding}" Grid.Row="1">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Доктор" Binding="{Binding Surname}" />
+                <DataGridTextColumn Header="Специальность" Binding="{Binding Speciality}" />
+                <DataGridTemplateColumn Header="Понедельник">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ItemsControl ItemsSource="{Binding WorkingHours[0]}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Path=., StringFormat='{}{0:HH:mm}'}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Заметки">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ItemsControl ItemsSource="{Binding WorkingHours[0]}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Path.}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Понедельник">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ItemsControl ItemsSource="{Binding WorkingHours[1]}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Path=., StringFormat='{}{0:HH:mm}'}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Заметки">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ItemsControl ItemsSource="{Binding WorkingHours[1]}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Path.}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Понедельник">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ItemsControl ItemsSource="{Binding WorkingHours[2]}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Path=., StringFormat='{}{0:HH:mm}'}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Заметки">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ItemsControl ItemsSource="{Binding WorkingHours[2]}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Path.}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Понедельник">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ItemsControl ItemsSource="{Binding WorkingHours[3]}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Path=., StringFormat='{}{0:HH:mm}'}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Заметки">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ItemsControl ItemsSource="{Binding WorkingHours[3]}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Path.}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Понедельник">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ItemsControl ItemsSource="{Binding WorkingHours[4]}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Path=., StringFormat='{}{0:HH:mm}'}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Заметки">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ItemsControl ItemsSource="{Binding WorkingHours[4]}">
+
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Path.}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Понедельник">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ItemsControl ItemsSource="{Binding WorkingHours[5]}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Path=., StringFormat='{}{0:HH:mm}'}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Заметки">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ItemsControl ItemsSource="{Binding WorkingHours[5]}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Path.}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</Window>
